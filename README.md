@@ -59,7 +59,7 @@ const client = new LatticeClient(
   new VolumeClient(content),
 );
 
-const { view, volume } = await client.block("latest");
+const { view, volume } = await client.latestBlock();
 console.log(view.height, volume.decodeRoot());
 ```
 

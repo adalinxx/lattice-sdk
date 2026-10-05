@@ -56,6 +56,32 @@ export interface BlockView {
   readonly rewardCredited?: bigint;
 }
 
+export interface LatestBlockView {
+  readonly height: bigint;
+  readonly hash: string;
+  readonly transactionCount: number;
+  readonly timestamp: bigint;
+  readonly previousBlock?: string;
+  readonly rewardRecipient?: string;
+  readonly rewardCredited?: bigint;
+}
+
+export function parseLatestBlock(value: unknown): LatestBlockView {
+  const body = record(value, "latest block");
+  const previousBlock = optionalString(body.previousBlock, "latestBlock.previousBlock");
+  const rewardRecipient = optionalString(body.rewardRecipient, "latestBlock.rewardRecipient");
+  const rewardCredited = optionalDecimal(body.rewardCredited, "latestBlock.rewardCredited");
+  return {
+    height: decimal(body.height, "latestBlock.height"),
+    hash: string(body.hash, "latestBlock.hash"),
+    transactionCount: integer(body.transactionCount, "latestBlock.transactionCount"),
+    timestamp: decimal(body.timestamp, "latestBlock.timestamp"),
+    ...(previousBlock === undefined ? {} : { previousBlock }),
+    ...(rewardRecipient === undefined ? {} : { rewardRecipient }),
+    ...(rewardCredited === undefined ? {} : { rewardCredited }),
+  };
+}
+
 export function parseBlock(value: unknown): BlockView {
   const body = record(value, "block");
   const previousBlock = optionalString(body.previousBlock, "block.previousBlock");

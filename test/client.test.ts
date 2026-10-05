@@ -31,6 +31,22 @@ test("legacy JSON-number consensus fields are rejected", async () => {
   await assert.rejects(client.account("alice"), /balance must be a canonical decimal string/);
 });
 
+test("latest block is its own summary wire shape", async () => {
+  const fetch = async (): Promise<Response> =>
+    response({
+      height: "42",
+      hash: "bafylatest",
+      transactionCount: 3,
+      timestamp: "1000",
+      rewardCredited: "25",
+    });
+  const client = new NodeClient("https://reads.example.org", ["Nexus"], { fetch });
+  const latest = await client.latestBlock();
+  assert.equal(latest.height, 42n);
+  assert.equal(latest.hash, "bafylatest");
+  assert.equal(latest.rewardCredited, 25n);
+});
+
 test("insecure remote node URLs are rejected", () => {
   assert.throws(() => new NodeClient("http://reads.example.org", ["Nexus"]), /must use HTTPS/);
   assert.doesNotThrow(() => new NodeClient("http://127.0.0.1:8080", ["Nexus"]));

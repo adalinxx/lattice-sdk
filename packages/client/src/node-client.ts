@@ -2,11 +2,13 @@ import {
   type AccountState,
   type BlockView,
   type ChainInfo,
+  type LatestBlockView,
   type NodeStatus,
   type TransactionProjection,
   parseAccount,
   parseBlock,
   parseChainInfo,
+  parseLatestBlock,
   parseNodeStatus,
   parseTransactionProjection,
 } from "./models.js";
@@ -148,8 +150,8 @@ export class NodeClient {
     ) as Promise<BlockView>;
   }
 
-  latestBlock(signal?: AbortSignal): Promise<unknown> {
-    return this.#request("/api/block/latest", (value) => value, signal);
+  latestBlock(signal?: AbortSignal): Promise<LatestBlockView> {
+    return this.#request("/api/block/latest", parseLatestBlock, signal) as Promise<LatestBlockView>;
   }
 
   account(owner: string, signal?: AbortSignal): Promise<AccountState> {

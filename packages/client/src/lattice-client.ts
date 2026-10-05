@@ -12,6 +12,14 @@ export class LatticeClient {
     this.volumes = volumes;
   }
 
+  async latestBlock(signal?: AbortSignal): Promise<{
+    readonly view: BlockView;
+    readonly volume: VerifiedVolume;
+  }> {
+    const latest = await this.node.latestBlock(signal);
+    return this.block(latest.hash, signal);
+  }
+
   async block(
     id: string | bigint,
     signal?: AbortSignal,
