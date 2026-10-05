@@ -6,7 +6,7 @@
  */
 export function nodeCookieAuthorization(cookie: string): string {
   const value = cookie.trim();
-  if (value.length === 0 || /[\s]/.test(value)) {
+  if (value.length === 0 || /\s/.test(value)) {
     throw new Error("node cookie must be a non-empty token without whitespace");
   }
   if (!value.includes(":")) return `Bearer ${value}`;

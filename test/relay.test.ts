@@ -157,8 +157,10 @@ test("the default fetch is called with a valid receiver (browser Illegal invocat
 
 test("an operator-port submitter sends the node cookie", async () => {
   let seen: string | null = null;
+  let redirect: RequestRedirect | undefined;
   const fetch = async (_input: string | URL, init?: RequestInit): Promise<Response> => {
     seen = new Headers(init?.headers).get("Authorization");
+    redirect = init?.redirect;
     return new Response(JSON.stringify({ transactionCID: "bafytransaction" }), { status: 200 });
   };
   const body = buildTransfer({
@@ -175,4 +177,5 @@ test("an operator-port submitter sends the node cookie", async () => {
   });
   await submitter.submit(transactionPayload({ ed01: "signature" }, body));
   assert.equal(seen, "Bearer abc123");
+  assert.equal(redirect, "error", "the cookie never follows a redirect");
 });

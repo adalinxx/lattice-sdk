@@ -157,6 +157,9 @@ export class HTTPTransactionSubmitter implements TransactionSubmitter {
         ...(this.#authorization === undefined ? {} : { Authorization: this.#authorization }),
       },
       body: JSON.stringify(payload),
+      // A redirect would re-send the payload (and any Authorization) where
+      // the answering host points; node routes never redirect.
+      redirect: "error",
       signal: combined,
     });
     const text = await boundedText(response, this.#maximumResponseBytes);
