@@ -296,7 +296,14 @@ export class EndpointResolver {
     const host = new URL(url).hostname;
     if (host.startsWith("[") || ipv4(host) !== undefined) return true;
     try {
-      const addresses = await this.#lookup(host, signal);
+      const timeout = AbortSignal.timeout(this.#timeoutMilliseconds);
+      const bounded = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+      const addresses = await Promise.race([
+        this.#lookup(host, bounded),
+        new Promise<never>((_, reject) => {
+          bounded.addEventListener("abort", () => reject(bounded.reason), { once: true });
+        }),
+      ]);
       return addresses.length > 0 && addresses.every(isPublicAddress);
     } catch {
       return false;

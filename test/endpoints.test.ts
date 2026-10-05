@@ -403,3 +403,13 @@ test("a walk stops at its request budget however wide the declared tree is", asy
   assert.ok(requests <= 30, `made ${requests} requests`);
   assert.ok(found.length > 0);
 });
+
+test("a lookup that never answers is timed like any request", async () => {
+  const fetch = network(liveRoutes);
+  const resolver = new EndpointResolver(new NodeClient(READ, ["Nexus"], { fetch }), {
+    fetch,
+    timeoutMilliseconds: 50,
+    lookup: () => new Promise(() => {}),
+  });
+  assert.deepEqual(await resolver.resolve(["Nexus", "testnet"]), []);
+});
