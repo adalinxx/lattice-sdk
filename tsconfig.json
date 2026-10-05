@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/volumes" },
+    { "path": "packages/client" },
+    { "path": "packages/relay" },
+    { "path": "packages/sdk" }
+  ]
+}

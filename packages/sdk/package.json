@@ -1,0 +1,31 @@
+{
+  "name": "@adalinxx/lattice-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Developer SDK for the Lattice network",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adalinxx/lattice-sdk.git",
+    "directory": "packages/sdk"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@adalinxx/lattice-client": "0.1.0",
+    "@adalinxx/lattice-core": "0.1.0",
+    "@adalinxx/lattice-relay": "0.1.0",
+    "@adalinxx/lattice-volumes": "0.1.0"
+  }
+}

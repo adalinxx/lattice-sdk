@@ -1,0 +1,28 @@
+{
+  "name": "@adalinxx/lattice-relay",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Explicit relay and private-node transaction submission transports for Lattice",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adalinxx/lattice-sdk.git",
+    "directory": "packages/relay"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@adalinxx/lattice-core": "0.1.0"
+  }
+}

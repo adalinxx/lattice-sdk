@@ -1,0 +1,31 @@
+{
+  "name": "lattice-sdk-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript SDK for the Lattice network",
+  "license": "MIT",
+  "repository": "github:adalinxx/lattice-sdk",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run vectors:fetch && npm run build && tsx --test test/*.test.ts",
+    "typecheck": "tsc -b --pretty false",
+    "vectors:fetch": "node scripts/fetch-vectors.mjs",
+    "vectors:update": "node scripts/update-vector-lock.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
