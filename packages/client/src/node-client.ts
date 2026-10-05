@@ -16,26 +16,15 @@ import {
   parseNodeStatus,
   parseTransactionProjection,
 } from "./models.js";
-import { integer, record, string, stringArray } from "./wire.js";
+import { type Fetch, getJSON } from "./http.js";
 
-export type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export { type Fetch, NodeError } from "./http.js";
+import { integer, record, string, stringArray } from "./wire.js";
 
 export interface NodeClientOptions {
   readonly fetch?: Fetch;
   readonly timeoutMilliseconds?: number;
   readonly maximumResponseBytes?: number;
-}
-
-export class NodeError extends Error {
-  readonly status: number;
-  readonly refusal?: string;
-
-  constructor(status: number, refusal?: string) {
-    super(refusal ?? `HTTP ${status}`);
-    this.name = "NodeError";
-    this.status = status;
-    if (refusal !== undefined) this.refusal = refusal;
-  }
 }
 
 function isLoopback(hostname: string): boolean {
@@ -52,49 +41,6 @@ export function normalizeNodeURL(input: string): string {
     throw new Error("node URL must use HTTPS, except for loopback HTTP");
   }
   return url.toString().replace(/\/$/, "");
-}
-
-function refusal(text: string): string | undefined {
-  try {
-    const body = record(JSON.parse(text));
-    const error = body.error;
-    if (typeof error === "string") return error;
-    if (error !== undefined) {
-      const message = record(error).message;
-      if (typeof message === "string") return message;
-    }
-  } catch {
-    // The status remains useful even when the response is not JSON.
-  }
-  return undefined;
-}
-
-async function boundedText(response: Response, maximumBytes: number): Promise<string> {
-  const declared = response.headers.get("content-length");
-  if (declared !== null && Number(declared) > maximumBytes) {
-    throw new NodeError(response.status, "response too large");
-  }
-  if (response.body === null) return "";
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > maximumBytes) {
-      await reader.cancel();
-      throw new NodeError(response.status, "response too large");
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
 export class NodeClient {
@@ -126,21 +72,15 @@ export class NodeClient {
     signal?: AbortSignal,
     parameters: Readonly<Record<string, string>> = {},
   ): Promise<unknown> {
-    const timeout = AbortSignal.timeout(this.#timeoutMilliseconds);
-    const combined = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
-    const response = await this.#fetch(this.#url(path, parameters), {
-      headers: { Accept: "application/json" },
-      signal: combined,
-    });
-    const text = await boundedText(response, this.#maximumResponseBytes);
-    if (!response.ok) throw new NodeError(response.status, refusal(text));
-    let value: unknown;
-    try {
-      value = JSON.parse(text);
-    } catch {
-      throw new NodeError(response.status, "invalid JSON response");
-    }
-    return parser(value);
+    return parser(
+      await getJSON(
+        this.#fetch,
+        this.#url(path, parameters),
+        this.#timeoutMilliseconds,
+        this.#maximumResponseBytes,
+        signal,
+      ),
+    );
   }
 
   health(signal?: AbortSignal): Promise<NodeStatus> {
