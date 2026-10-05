@@ -21,6 +21,10 @@ export function integer(value: unknown, name: string): number {
   return value;
 }
 
+export function optionalInteger(value: unknown, name: string): number | undefined {
+  return value === undefined ? undefined : integer(value, name);
+}
+
 export function decimal(value: unknown, name: string): bigint {
   if (typeof value !== "string" || !/^(?:0|-?[1-9][0-9]*)$/.test(value)) {
     throw new TypeError(`${name} must be a canonical decimal string`);

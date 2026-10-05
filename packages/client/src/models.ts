@@ -4,6 +4,7 @@ import {
   integer,
   optionalBoolean,
   optionalDecimal,
+  optionalInteger,
   optionalString,
   record,
   string,
@@ -288,13 +289,12 @@ export function parseBlockChildren(value: unknown): BlockChild[] {
   return array(body.children, "children", (entry, name) => {
     const child = record(entry, name);
     const height = optionalDecimal(child.height, `${name}.height`);
+    const transactionCount = optionalInteger(child.transactionCount, `${name}.transactionCount`);
     return {
       directory: string(child.directory, `${name}.directory`),
       blockHash: string(child.blockHash, `${name}.blockHash`),
       ...(height === undefined ? {} : { height }),
-      ...(child.transactionCount === undefined
-        ? {}
-        : { transactionCount: integer(child.transactionCount, `${name}.transactionCount`) }),
+      ...(transactionCount === undefined ? {} : { transactionCount }),
     };
   });
 }

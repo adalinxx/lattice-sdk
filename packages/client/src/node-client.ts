@@ -185,7 +185,10 @@ export class NodeClient {
       }
       ceiling = row.height;
     }
-    if (page.nextBefore !== undefined && ceiling !== undefined && page.nextBefore > ceiling) {
+    if (
+      page.nextBefore !== undefined &&
+      (page.nextBefore < 1n || (ceiling !== undefined && page.nextBefore > ceiling))
+    ) {
       throw new TypeError("blocks.nextBefore does not continue the page");
     }
     return page;

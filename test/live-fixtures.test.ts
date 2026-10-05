@@ -85,6 +85,13 @@ test("a blocks page that breaks its own contract fails closed", async () => {
     client({ ...live, nextBefore: "4481" }).blocks(),
     /nextBefore does not continue/,
   );
+  await assert.rejects(client({ blocks: [], nextBefore: "0" }).blocks(), /nextBefore/);
+  // A height this node does not hold is omitted: nextBefore may fall below the last row.
+  const holed = await client({ blocks: live.blocks.slice(0, 1), nextBefore: "4480" }).blocks({
+    before: 4483n,
+    limit: 3,
+  });
+  assert.equal(holed.nextBefore, 4480n);
   await assert.rejects(
     client({ ...live, blocks: [{ ...live.blocks[0], height: 4482 }] }).blocks(),
     /height must be a canonical decimal string/,
@@ -154,6 +161,27 @@ test("live block children name each committed child block", async () => {
       blockHash: "bafyreiaomyjl7iryqain2l4jkz4knp5cvukkhgrbngjfl53llkeql7dnb4",
     },
   ]);
+});
+
+test("a node hosting the child reports its height and transaction count", async () => {
+  const requested: string[] = [];
+  const client = new NodeClient("https://reads.example.org", ["Nexus", "testnet"], {
+    fetch: async (input: string | URL) => {
+      const url = new URL(input);
+      requested.push(`${url.pathname}?${url.searchParams.toString()}`);
+      return new Response(
+        JSON.stringify({
+          children: [
+            { directory: "deep", blockHash: "bafychild", height: "12", transactionCount: 2 },
+          ],
+        }),
+      );
+    },
+  });
+  assert.deepEqual(await client.children("bafyparent"), [
+    { directory: "deep", blockHash: "bafychild", height: 12n, transactionCount: 2 },
+  ]);
+  assert.deepEqual(requested, ["/api/block/bafyparent/children?chainPath=Nexus%2Ftestnet"]);
 });
 
 test("a transaction outside the canonical executed chain omits inclusion", async () => {
