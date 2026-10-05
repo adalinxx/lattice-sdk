@@ -16,15 +16,46 @@ export interface HTTPSubmitterOptions {
   readonly maximumResponseBytes?: number;
 }
 
+/**
+ * The node's named refusals for `POST /transactions` (lattice-node's pool,
+ * runtime, and API error case names). Relay policy such as
+ * `belowMinRelayFee` is one node's choice, never consensus.
+ */
+export const SUBMISSION_REFUSALS = [
+  "belowMinRelayFee",
+  "feeTooLow",
+  "conflictingNonce",
+  "invalidState",
+  "tooLarge",
+  "full",
+  "unresolved",
+  "contextChanged",
+  "unknownChain",
+  "shuttingDown",
+  "unresolvedTransactionContent",
+  "requestTooLarge",
+] as const;
+
+export type SubmissionRefusal = (typeof SUBMISSION_REFUSALS)[number];
+
+function namedRefusal(refusal: string | undefined): SubmissionRefusal | undefined {
+  return SUBMISSION_REFUSALS.find((name) => name === refusal);
+}
+
 export class SubmissionError extends Error {
   readonly status: number;
+  /** The node's refusal text, verbatim. */
   readonly refusal?: string;
+  /** Set when `refusal` is one of {@link SUBMISSION_REFUSALS}. */
+  readonly reason?: SubmissionRefusal;
 
   constructor(status: number, refusal?: string) {
     super(refusal ?? `submission failed with HTTP ${status}`);
     this.name = "SubmissionError";
     this.status = status;
     if (refusal !== undefined) this.refusal = refusal;
+    const reason = namedRefusal(refusal);
+    if (reason !== undefined) this.reason = reason;
   }
 }
 
@@ -122,7 +153,9 @@ export class HTTPTransactionSubmitter implements TransactionSubmitter {
     try {
       decoded = JSON.parse(text);
     } catch {
-      throw new SubmissionError(response.status, "invalid JSON response");
+      // A refusal without a JSON body (404 with public submit off, 413) is
+      // still a refusal: keep its status rather than blaming the encoding.
+      throw new SubmissionError(response.status, response.ok ? "invalid JSON response" : undefined);
     }
     if (!response.ok) throw new SubmissionError(response.status, errorMessage(decoded));
     if (decoded === null || typeof decoded !== "object" || Array.isArray(decoded)) {
