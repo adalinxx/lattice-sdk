@@ -17,6 +17,7 @@ import {
   accountFromPrivateKey,
   buildTransfer,
   hexToBytes,
+  signedTransactionCID,
   signTransactionBody,
   transactionPayload,
   type TransactionBody,
@@ -163,8 +164,13 @@ test("local node: fund, submit via the operator and public relays, observe inclu
   assert.equal(unknown.reason, "unknownChain");
   assert.equal(unknown.status, 404);
 
-  // Operator (loopback) route.
-  const first = await operatorRelay.submit(signed(transfer(1_000n, 5n, 0n)));
+  // Operator (loopback) route. The CID the node reports is recomputable locally.
+  const firstPayload = signed(transfer(1_000n, 5n, 0n));
+  const first = await operatorRelay.submit(firstPayload);
+  assert.equal(
+    signedTransactionCID(firstPayload.transaction.signatures, transfer(1_000n, 5n, 0n)),
+    first.transactionCID,
+  );
   const cheaper = await refusal(operatorRelay.submit(signed(transfer(999n, 2n, 0n))));
   assert.equal(cheaper.reason, "feeTooLow");
   assert.equal((await reads.transaction(first.transactionCID)).blockHeight, undefined);
@@ -179,7 +185,12 @@ test("local node: fund, submit via the operator and public relays, observe inclu
   assert.equal(block.rewardCredited, (await reads.block(1n)).rewardCredited! + 5n);
 
   // Public listener with --public-submit.
-  const second = await publicRelay.submit(signed(transfer(2_000n, 3n, 1n)));
+  const secondPayload = signed(transfer(2_000n, 3n, 1n));
+  const second = await publicRelay.submit(secondPayload);
+  assert.equal(
+    signedTransactionCID(secondPayload.transaction.signatures, transfer(2_000n, 3n, 1n)),
+    second.transactionCID,
+  );
   const viaPublic = await until(async () => {
     await mine(1);
     const projection = await publicReads.transaction(second.transactionCID);

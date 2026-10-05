@@ -235,7 +235,7 @@ export class EndpointResolver {
 
   constructor(root: NodeClient, options: EndpointResolverOptions = {}) {
     this.root = root;
-    this.#fetch = options.fetch ?? fetch;
+    this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     if (options.lookup !== undefined) this.#lookup = options.lookup;
     this.#timeoutMilliseconds = options.timeoutMilliseconds ?? 4_000;
     this.#maximumResponseBytes = options.maximumResponseBytes ?? 64 * 1024;

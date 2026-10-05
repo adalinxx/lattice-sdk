@@ -54,7 +54,7 @@ export class NodeClient {
     if (chainPath.length === 0) throw new Error("chainPath must not be empty");
     this.baseURL = normalizeNodeURL(baseURL);
     this.chainPath = [...chainPath];
-    this.#fetch = options.fetch ?? fetch;
+    this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.#timeoutMilliseconds = options.timeoutMilliseconds ?? 8_000;
     this.#maximumResponseBytes = options.maximumResponseBytes ?? 4 * 1024 * 1024;
   }

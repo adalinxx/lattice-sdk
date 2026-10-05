@@ -134,7 +134,7 @@ export class HTTPTransactionSubmitter implements TransactionSubmitter {
 
   constructor(endpoint: string, options: HTTPSubmitterOptions = {}) {
     this.endpoint = submissionURL(endpoint);
-    this.#fetch = options.fetch ?? fetch;
+    this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.#timeoutMilliseconds = options.timeoutMilliseconds ?? 8_000;
     this.#maximumResponseBytes = options.maximumResponseBytes ?? 1024 * 1024;
   }

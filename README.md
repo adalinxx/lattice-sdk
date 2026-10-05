@@ -70,6 +70,7 @@ import {
   HTTPTransactionSubmitter,
   buildTransfer,
   signTransactionBody,
+  signedTransactionCID,
   transactionPayload,
 } from "@adalinxx/lattice-sdk";
 
@@ -86,6 +87,10 @@ const payload = transactionPayload({ [signed.publicKey]: signed.signature }, bod
 
 const relay = new HTTPTransactionSubmitter("https://relay.example.org/transactions");
 const result = await relay.submit(payload);
+// The node's reported CID is recomputable locally; don't trust it blindly.
+if (result.transactionCID !== signedTransactionCID(payload.transaction.signatures, body)) {
+  throw new Error("relay reported a different transaction");
+}
 ```
 
 ## Conformance

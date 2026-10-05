@@ -51,3 +51,18 @@ test("insecure remote node URLs are rejected", () => {
   assert.throws(() => new NodeClient("http://reads.example.org", ["Nexus"]), /must use HTTPS/);
   assert.doesNotThrow(() => new NodeClient("http://127.0.0.1:8080", ["Nexus"]));
 });
+
+test("the default fetch is called with a valid receiver (browser Illegal invocation)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = function (this: unknown) {
+    // Browsers throw "Illegal invocation" when fetch's receiver is not the global.
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    return Promise.resolve(response({ owner: "alice", balance: "1", nonce: "0" }));
+  } as typeof fetch;
+  try {
+    const client = new NodeClient("https://reads.example.org", ["Nexus"]);
+    assert.equal((await client.account("alice")).balance, 1n);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

@@ -183,6 +183,49 @@ export function transactionSigningPreimage(
   return lines.join("\n");
 }
 
+/**
+ * Canonical DAG-CBOR of a signed transaction envelope, as the node stores it:
+ * `{ body: { rawCID }, signatures: [{ key, value }] }` with signature entries
+ * sorted by lowercase-hex public key (ed25519 Multikey keys, 64-byte
+ * signatures; a `0x` prefix or upper-case hex is normalized as the node does). The returned CID is the
+ * `transactionCID` a node reports on submission, so a client can verify it.
+ * `bodyCID` must be the canonical CIDv1 string (as `encodeTransactionBody`
+ * returns it); prefer `signedTransactionCID`, which derives it.
+ */
+export function encodeSignedTransaction(
+  signatures: Readonly<Record<string, string>>,
+  bodyCID: string,
+): { readonly bytes: Uint8Array; readonly cid: string } {
+  // The node rewrites a parseable key/signature to lowercase hex without a
+  // `0x` prefix and keeps anything else verbatim; only the parseable forms
+  // can be valid, so accept exactly those and refuse the rest.
+  const canonical = (value: string, pattern: RegExp, what: string): string => {
+    const hex = value.startsWith("0x") ? value.slice(2) : value;
+    if (!pattern.test(hex)) throw new Error(`${what} is not canonical hex`);
+    return hex.toLowerCase();
+  };
+  const entries = new Map<string, string>();
+  for (const [key, value] of Object.entries(signatures)) {
+    const normalizedKey = canonical(key, /^[eE][dD]01[0-9a-fA-F]{64}$/, "signature key");
+    if (entries.has(normalizedKey)) throw new Error("duplicate signature key");
+    entries.set(normalizedKey, canonical(value, /^[0-9a-fA-F]{128}$/, "signature"));
+  }
+  const sorted = [...entries.keys()].sort();
+  const bytes = encodeDagCbor({
+    body: { rawCID: bodyCID },
+    signatures: sorted.map((key) => ({ key, value: entries.get(key)! })),
+  });
+  return { bytes, cid: cidV1DagCbor(bytes) };
+}
+
+/** The CID of a signed transaction (see `encodeSignedTransaction`). */
+export function signedTransactionCID(
+  signatures: Readonly<Record<string, string>>,
+  body: TransactionBody,
+): string {
+  return encodeSignedTransaction(signatures, encodeTransactionBody(body).cid).cid;
+}
+
 export function toWireTransactionBody(body: TransactionBody): WireTransactionBody {
   assertBody(body);
   return {
