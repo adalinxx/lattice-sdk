@@ -21,6 +21,10 @@ export function integer(value: unknown, name: string): number {
   return value;
 }
 
+export function optionalInteger(value: unknown, name: string): number | undefined {
+  return value === undefined ? undefined : integer(value, name);
+}
+
 export function decimal(value: unknown, name: string): bigint {
   if (typeof value !== "string" || !/^(?:0|-?[1-9][0-9]*)$/.test(value)) {
     throw new TypeError(`${name} must be a canonical decimal string`);
@@ -43,4 +47,10 @@ export function array<T>(
 
 export function stringArray(value: unknown, name: string): string[] {
   return array(value, name, string);
+}
+
+export function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new TypeError(`${name} must be a boolean`);
+  return value;
 }

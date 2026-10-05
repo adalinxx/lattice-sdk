@@ -2,7 +2,9 @@ import {
   array,
   decimal,
   integer,
+  optionalBoolean,
   optionalDecimal,
+  optionalInteger,
   optionalString,
   record,
   string,
@@ -213,6 +215,10 @@ export interface ChainInfo {
   readonly height?: bigint;
   readonly tipCID?: string;
   readonly chain: readonly string[];
+  /** This node's relay-policy fee floor; never consensus. */
+  readonly minRelayFee?: bigint;
+  /** Whether the answering listener accepts `POST /transactions`. */
+  readonly acceptsSubmit?: boolean;
 }
 
 export function parseChainInfo(value: unknown): ChainInfo {
@@ -220,10 +226,75 @@ export function parseChainInfo(value: unknown): ChainInfo {
   const genesisHash = optionalString(body.genesisHash, "chainInfo.genesisHash");
   const height = optionalDecimal(body.height, "chainInfo.height");
   const tipCID = optionalString(body.tipCID, "chainInfo.tipCID");
+  const minRelayFee = optionalDecimal(body.minRelayFee, "chainInfo.minRelayFee");
+  const acceptsSubmit = optionalBoolean(body.acceptsSubmit, "chainInfo.acceptsSubmit");
   return {
     ...(genesisHash === undefined ? {} : { genesisHash }),
     ...(height === undefined ? {} : { height }),
     ...(tipCID === undefined ? {} : { tipCID }),
     chain: stringArray(body.chain, "chainInfo.chain"),
+    ...(minRelayFee === undefined ? {} : { minRelayFee }),
+    ...(acceptsSubmit === undefined ? {} : { acceptsSubmit }),
   };
+}
+
+/** One canonical block summary from `GET /api/blocks`; no `rewardCredited`. */
+export interface BlockSummary {
+  readonly height: bigint;
+  readonly hash: string;
+  readonly previousBlock?: string;
+  readonly timestamp: bigint;
+  readonly transactionCount: number;
+  readonly rewardRecipient?: string;
+}
+
+export interface BlocksPage {
+  readonly blocks: readonly BlockSummary[];
+  /** Pass as the next page's `before`; absent once height 0 is listed. */
+  readonly nextBefore?: bigint;
+}
+
+export function parseBlocksPage(value: unknown): BlocksPage {
+  const body = record(value, "blocks page");
+  const nextBefore = optionalDecimal(body.nextBefore, "blocks.nextBefore");
+  return {
+    blocks: array(body.blocks, "blocks.blocks", (entry, name) => {
+      const row = record(entry, name);
+      const previousBlock = optionalString(row.previousBlock, `${name}.previousBlock`);
+      const rewardRecipient = optionalString(row.rewardRecipient, `${name}.rewardRecipient`);
+      return {
+        height: decimal(row.height, `${name}.height`),
+        hash: string(row.hash, `${name}.hash`),
+        ...(previousBlock === undefined ? {} : { previousBlock }),
+        timestamp: decimal(row.timestamp, `${name}.timestamp`),
+        transactionCount: integer(row.transactionCount, `${name}.transactionCount`),
+        ...(rewardRecipient === undefined ? {} : { rewardRecipient }),
+      };
+    }),
+    ...(nextBefore === undefined ? {} : { nextBefore }),
+  };
+}
+
+/** A child commitment from `GET /api/block/:cid/children`. */
+export interface BlockChild {
+  readonly directory: string;
+  readonly blockHash: string;
+  /** Omitted when the answering node does not host that child chain. */
+  readonly height?: bigint;
+  readonly transactionCount?: number;
+}
+
+export function parseBlockChildren(value: unknown): BlockChild[] {
+  const body = record(value, "block children");
+  return array(body.children, "children", (entry, name) => {
+    const child = record(entry, name);
+    const height = optionalDecimal(child.height, `${name}.height`);
+    const transactionCount = optionalInteger(child.transactionCount, `${name}.transactionCount`);
+    return {
+      directory: string(child.directory, `${name}.directory`),
+      blockHash: string(child.blockHash, `${name}.blockHash`),
+      ...(height === undefined ? {} : { height }),
+      ...(transactionCount === undefined ? {} : { transactionCount }),
+    };
+  });
 }

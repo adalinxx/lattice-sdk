@@ -1,5 +1,7 @@
 import {
   type AccountState,
+  type BlockChild,
+  type BlocksPage,
   type BlockView,
   type ChainInfo,
   type LatestBlockView,
@@ -7,6 +9,8 @@ import {
   type TransactionProjection,
   parseAccount,
   parseBlock,
+  parseBlockChildren,
+  parseBlocksPage,
   parseChainInfo,
   parseLatestBlock,
   parseNodeStatus,
@@ -120,10 +124,11 @@ export class NodeClient {
     path: string,
     parser: (value: unknown) => unknown,
     signal?: AbortSignal,
+    parameters: Readonly<Record<string, string>> = {},
   ): Promise<unknown> {
     const timeout = AbortSignal.timeout(this.#timeoutMilliseconds);
     const combined = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
-    const response = await this.#fetch(this.#url(path), {
+    const response = await this.#fetch(this.#url(path, parameters), {
       headers: { Accept: "application/json" },
       signal: combined,
     });
@@ -152,6 +157,50 @@ export class NodeClient {
 
   latestBlock(signal?: AbortSignal): Promise<LatestBlockView> {
     return this.#request("/api/block/latest", parseLatestBlock, signal) as Promise<LatestBlockView>;
+  }
+
+  /**
+   * A page of canonical block summaries, newest first. `before` is exclusive;
+   * `limit` is 1...25 (the node's cap). The page is presentation: rows must
+   * descend strictly below `before` and never exceed `limit`.
+   */
+  async blocks(
+    options: { readonly before?: bigint; readonly limit?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<BlocksPage> {
+    const { before, limit } = options;
+    if (before !== undefined && before < 0n) throw new RangeError("before must not be negative");
+    if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > 25)) {
+      throw new RangeError("limit must be an integer from 1 to 25");
+    }
+    const page = (await this.#request("/api/blocks", parseBlocksPage, signal, {
+      ...(before === undefined ? {} : { before: before.toString() }),
+      ...(limit === undefined ? {} : { limit: limit.toString() }),
+    })) as BlocksPage;
+    if (page.blocks.length > (limit ?? 25)) throw new TypeError("blocks page exceeds its limit");
+    let ceiling = before;
+    for (const row of page.blocks) {
+      if (ceiling !== undefined && row.height >= ceiling) {
+        throw new TypeError("blocks page is not strictly descending below before");
+      }
+      ceiling = row.height;
+    }
+    if (
+      page.nextBefore !== undefined &&
+      (page.nextBefore < 1n || (ceiling !== undefined && page.nextBefore > ceiling))
+    ) {
+      throw new TypeError("blocks.nextBefore does not continue the page");
+    }
+    return page;
+  }
+
+  /** Child commitments of a block at this client's chain level. */
+  children(blockCID: string, signal?: AbortSignal): Promise<BlockChild[]> {
+    return this.#request(
+      `/api/block/${encodeURIComponent(blockCID)}/children`,
+      parseBlockChildren,
+      signal,
+    ) as Promise<BlockChild[]>;
   }
 
   account(owner: string, signal?: AbortSignal): Promise<AccountState> {
