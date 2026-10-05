@@ -25,6 +25,12 @@ export interface NodeClientOptions {
   readonly fetch?: Fetch;
   readonly timeoutMilliseconds?: number;
   readonly maximumResponseBytes?: number;
+  /**
+   * `Authorization` header for a node's operator (loopback) port, which
+   * requires the node's cookie on every read but `/health`; see
+   * `nodeCookieAuthorization`. Public read endpoints need none.
+   */
+  readonly authorization?: string;
 }
 
 function isLoopback(hostname: string): boolean {
@@ -49,6 +55,7 @@ export class NodeClient {
   readonly #fetch: Fetch;
   readonly #timeoutMilliseconds: number;
   readonly #maximumResponseBytes: number;
+  readonly #authorization: string | undefined;
 
   constructor(baseURL: string, chainPath: readonly string[], options: NodeClientOptions = {}) {
     if (chainPath.length === 0) throw new Error("chainPath must not be empty");
@@ -57,6 +64,7 @@ export class NodeClient {
     this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.#timeoutMilliseconds = options.timeoutMilliseconds ?? 8_000;
     this.#maximumResponseBytes = options.maximumResponseBytes ?? 4 * 1024 * 1024;
+    this.#authorization = options.authorization;
   }
 
   #url(path: string, parameters: Readonly<Record<string, string>> = {}): URL {
@@ -79,6 +87,7 @@ export class NodeClient {
         this.#timeoutMilliseconds,
         this.#maximumResponseBytes,
         signal,
+        this.#authorization,
       ),
     );
   }

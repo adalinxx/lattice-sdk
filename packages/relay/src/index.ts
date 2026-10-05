@@ -14,6 +14,11 @@ export interface HTTPSubmitterOptions {
   readonly fetch?: (input: string | URL, init?: RequestInit) => Promise<Response>;
   readonly timeoutMilliseconds?: number;
   readonly maximumResponseBytes?: number;
+  /**
+   * `Authorization` header, for a node's operator (loopback) port, which
+   * requires the node's cookie; see `nodeCookieAuthorization`.
+   */
+  readonly authorization?: string;
 }
 
 /**
@@ -131,12 +136,14 @@ export class HTTPTransactionSubmitter implements TransactionSubmitter {
   readonly #fetch: (input: string | URL, init?: RequestInit) => Promise<Response>;
   readonly #timeoutMilliseconds: number;
   readonly #maximumResponseBytes: number;
+  readonly #authorization: string | undefined;
 
   constructor(endpoint: string, options: HTTPSubmitterOptions = {}) {
     this.endpoint = submissionURL(endpoint);
     this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.#timeoutMilliseconds = options.timeoutMilliseconds ?? 8_000;
     this.#maximumResponseBytes = options.maximumResponseBytes ?? 1024 * 1024;
+    this.#authorization = options.authorization;
   }
 
   async submit(payload: TransactionPayload, signal?: AbortSignal): Promise<SubmitResult> {
@@ -144,7 +151,11 @@ export class HTTPTransactionSubmitter implements TransactionSubmitter {
     const combined = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
     const response = await this.#fetch(this.endpoint, {
       method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(this.#authorization === undefined ? {} : { Authorization: this.#authorization }),
+      },
       body: JSON.stringify(payload),
       signal: combined,
     });
