@@ -119,7 +119,10 @@ test("signed transaction CID refuses forms the node would keep verbatim", () => 
     { [`ec01${"ab".repeat(32)}`]: signature },
     { [key]: signature, [key.toUpperCase()]: signature },
   ]) {
-    assert.throws(() => encodeSignedTransaction(bad, body));
+    assert.throws(
+      () => encodeSignedTransaction(bad, body),
+      /not canonical hex|duplicate signature key/,
+    );
   }
 });
 

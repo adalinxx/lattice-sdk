@@ -189,6 +189,8 @@ export function transactionSigningPreimage(
  * sorted by lowercase-hex public key (ed25519 Multikey keys, 64-byte
  * signatures; a `0x` prefix or upper-case hex is normalized as the node does). The returned CID is the
  * `transactionCID` a node reports on submission, so a client can verify it.
+ * `bodyCID` must be the canonical CIDv1 string (as `encodeTransactionBody`
+ * returns it); prefer `signedTransactionCID`, which derives it.
  */
 export function encodeSignedTransaction(
   signatures: Readonly<Record<string, string>>,
