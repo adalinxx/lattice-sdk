@@ -28,8 +28,15 @@ function network(routes: Routes, dialed: string[] = []) {
     if (route === undefined) return new Response("{}", { status: 404 });
     if (typeof route === "function") {
       return new Promise((resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
-        Promise.resolve(route()).then(resolve, reject);
+        // AbortSignal.timeout's timer does not hold the event loop open.
+        const alive = setInterval(() => {}, 1_000);
+        init?.signal?.addEventListener("abort", () => {
+          clearInterval(alive);
+          reject(init.signal?.reason);
+        });
+        Promise.resolve(route())
+          .then(resolve, reject)
+          .finally(() => clearInterval(alive));
       });
     }
     return new Response(route);
@@ -409,7 +416,11 @@ test("a lookup that never answers is timed like any request", async () => {
   const resolver = new EndpointResolver(new NodeClient(READ, ["Nexus"], { fetch }), {
     fetch,
     timeoutMilliseconds: 50,
-    lookup: () => new Promise(() => {}),
+    lookup: (_host, signal) =>
+      new Promise(() => {
+        const alive = setInterval(() => {}, 1_000);
+        signal?.addEventListener("abort", () => clearInterval(alive));
+      }),
   });
   assert.deepEqual(await resolver.resolve(["Nexus", "testnet"]), []);
 });
