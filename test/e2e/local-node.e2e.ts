@@ -1,10 +1,11 @@
 // End-to-end against a local lattice-node: build adalinxx/lattice-node main and
 // run `LATTICE_NODE_BIN=<.build/debug> npm run test:e2e`. The node runs isolated
-// (--no-default-peers, loopback overlay port) on throwaway storage; nothing is
+// (--no-default-peers, no --peer) on throwaway storage, forking the Nexus
+// genesis privately; nothing is
 // ever submitted to a live chain.
 import assert from "node:assert/strict";
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, openSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -61,19 +62,17 @@ async function until<T>(probe: () => Promise<T | undefined>, what: string): Prom
   throw new Error(`timed out waiting for ${what}`);
 }
 
+/** Mines until the tip is `blocks` higher; one coordinator round may find nothing. */
 async function mine(blocks: number): Promise<void> {
-  for (let index = 0; index < blocks; index += 1) {
+  const reads = new NodeClient(operator, ["Nexus"]);
+  const target = ((await reads.chainInfo()).height ?? 0n) + BigInt(blocks);
+  await until(async () => {
     await run(join(bin!, "lattice-mining-coordinator"), [
-      "--node",
-      operator,
-      "--workers",
-      "2",
-      "--recipient",
-      `Nexus=${sender.address}`,
-      "--once",
-      "--no-stale-probe",
+      ...["--node", operator, "--workers", "2"],
+      ...["--recipient", `Nexus=${sender.address}`, "--once", "--no-stale-probe"],
     ]);
-  }
+    return ((await reads.chainInfo()).height ?? 0n) >= target || undefined;
+  }, `height ${target}`);
 }
 
 function signed(body: TransactionBody) {
@@ -86,6 +85,7 @@ before(async () => {
   const [rpc, read, overlay] = [await freePort(), await freePort(), await freePort()];
   operator = `http://127.0.0.1:${rpc}`;
   publicListener = `http://127.0.0.1:${read}`;
+  const logFile = openSync(join(directory, "node.log"), "a");
   node = spawn(
     join(bin, "lattice-node"),
     [
@@ -102,8 +102,11 @@ before(async () => {
       ...["--public-submit-rate", "0"],
       ...["--min-relay-fee", MIN_RELAY_FEE.toString()],
     ],
-    { stdio: "ignore" },
+    { stdio: ["ignore", logFile, logFile] },
   );
+  node.once("error", (error) => {
+    throw error;
+  });
   await until(async () => (await fetch(`${operator}/health`)).ok || undefined, "node health");
   await until(
     async () => (await fetch(`${publicListener}/health`)).ok || undefined,
@@ -111,8 +114,12 @@ before(async () => {
   );
 });
 
-after(() => {
-  node?.kill("SIGTERM");
+after(async () => {
+  if (node !== undefined && node.exitCode === null) {
+    const exited = new Promise((resolve) => node.once("exit", resolve));
+    node.kill("SIGTERM");
+    await exited;
+  }
   if (directory !== undefined) rmSync(directory, { recursive: true, force: true });
 });
 
@@ -161,8 +168,8 @@ test("local node: fund, submit via the operator and public relays, observe inclu
   const cheaper = await refusal(operatorRelay.submit(signed(transfer(999n, 2n, 0n))));
   assert.equal(cheaper.reason, "feeTooLow");
   assert.equal((await reads.transaction(first.transactionCID)).blockHeight, undefined);
-  await mine(1);
   const included = await until(async () => {
+    await mine(1);
     const projection = await reads.transaction(first.transactionCID);
     return projection.blockHeight === undefined ? undefined : projection;
   }, "operator-route inclusion");
@@ -173,12 +180,12 @@ test("local node: fund, submit via the operator and public relays, observe inclu
 
   // Public listener with --public-submit.
   const second = await publicRelay.submit(signed(transfer(2_000n, 3n, 1n)));
-  await mine(1);
   const viaPublic = await until(async () => {
+    await mine(1);
     const projection = await publicReads.transaction(second.transactionCID);
     return projection.blockHeight === undefined ? undefined : projection;
   }, "public-route inclusion");
-  assert.equal(viaPublic.blockHeight, included.blockHeight! + 1n);
+  assert.ok(viaPublic.blockHeight! > included.blockHeight!);
   assert.equal((await reads.account(recipient.address)).balance, 3_000n);
   assert.equal((await reads.account(sender.address)).nonce, 2n);
 });

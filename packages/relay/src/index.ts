@@ -19,7 +19,8 @@ export interface HTTPSubmitterOptions {
 /**
  * The node's named refusals for `POST /transactions` (lattice-node's pool,
  * runtime, and API error case names). Relay policy such as
- * `belowMinRelayFee` is one node's choice, never consensus.
+ * `belowMinRelayFee` is one node's choice, never consensus. A 429 with no
+ * body is a rate limit; a 429 named `full` is the node's pool.
  */
 export const SUBMISSION_REFUSALS = [
   "belowMinRelayFee",
@@ -32,7 +33,6 @@ export const SUBMISSION_REFUSALS = [
   "contextChanged",
   "unknownChain",
   "shuttingDown",
-  "unresolvedTransactionContent",
   "requestTooLarge",
 ] as const;
 
