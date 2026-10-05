@@ -298,6 +298,7 @@ export class EndpointResolver {
     try {
       const timeout = AbortSignal.timeout(this.#timeoutMilliseconds);
       const bounded = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+      bounded.throwIfAborted();
       const addresses = await Promise.race([
         this.#lookup(host, bounded),
         new Promise<never>((_, reject) => {
