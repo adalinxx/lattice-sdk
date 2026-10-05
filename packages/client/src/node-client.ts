@@ -16,27 +16,15 @@ import {
   parseNodeStatus,
   parseTransactionProjection,
 } from "./models.js";
-import { getJSON } from "./http.js";
-import { integer, record, string, stringArray } from "./wire.js";
+import { type Fetch, getJSON } from "./http.js";
 
-export type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export { type Fetch, NodeError } from "./http.js";
+import { integer, record, string, stringArray } from "./wire.js";
 
 export interface NodeClientOptions {
   readonly fetch?: Fetch;
   readonly timeoutMilliseconds?: number;
   readonly maximumResponseBytes?: number;
-}
-
-export class NodeError extends Error {
-  readonly status: number;
-  readonly refusal?: string;
-
-  constructor(status: number, refusal?: string) {
-    super(refusal ?? `HTTP ${status}`);
-    this.name = "NodeError";
-    this.status = status;
-    if (refusal !== undefined) this.refusal = refusal;
-  }
 }
 
 function isLoopback(hostname: string): boolean {

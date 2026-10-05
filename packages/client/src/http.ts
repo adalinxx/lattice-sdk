@@ -1,5 +1,18 @@
-import { NodeError, type Fetch } from "./node-client.js";
 import { record } from "./wire.js";
+
+export type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
+
+export class NodeError extends Error {
+  readonly status: number;
+  readonly refusal?: string;
+
+  constructor(status: number, refusal?: string) {
+    super(refusal ?? `HTTP ${status}`);
+    this.name = "NodeError";
+    this.status = status;
+    if (refusal !== undefined) this.refusal = refusal;
+  }
+}
 
 function refusal(text: string): string | undefined {
   try {
@@ -56,6 +69,9 @@ export async function getJSON(
   const combined = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
+    // A redirect would let any answering host steer the request to another
+    // host or scheme; node routes never redirect.
+    redirect: "error",
     signal: combined,
   });
   const text = await boundedText(response, maximumResponseBytes);

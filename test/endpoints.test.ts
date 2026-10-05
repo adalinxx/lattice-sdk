@@ -114,6 +114,16 @@ test("declared hosts that are not public HTTPS are never dialed", async () => {
     "https://[fd00::1]",
     "https://[::ffff:127.0.0.1]",
     "https://[::ffff:10.0.0.1]",
+    "https://[64:ff9b::a00:1]",
+    "https://[2002:a00:1::1]",
+    "https://[2001:0:4136:e378::1]",
+    "https://[2001:db8::1]",
+    "https://[100::1]",
+    "https://198.51.100.7",
+    "https://203.0.113.7",
+    "https://192.0.2.7",
+    "https://192.88.99.1",
+    "https://0x7f.1",
     "https://intranet",
     "https://printer.local",
     "https://db.internal",
@@ -124,6 +134,9 @@ test("declared hosts that are not public HTTPS are never dialed", async () => {
   for (const url of declared) assert.equal(declaredEndpointURL(url), undefined, url);
   assert.equal(declaredEndpointURL("https://reads.example.org/"), "https://reads.example.org");
   assert.equal(declaredEndpointURL("https://8.8.8.8"), "https://8.8.8.8");
+  assert.equal(declaredEndpointURL("https://192.0.1.1"), "https://192.0.1.1");
+  assert.equal(declaredEndpointURL("https://[64:ff9b::808:808]"), "https://[64:ff9b::808:808]");
+  assert.equal(declaredEndpointURL("https://[2002:808:808::1]"), "https://[2002:808:808::1]");
   assert.equal(declaredEndpointURL("https://[2001:4860::8888]"), "https://[2001:4860::8888]");
 
   const dialed: string[] = [];
@@ -264,4 +277,129 @@ test("the walk recurses through verified hosts only, bounded and timed per reque
 
   await assert.rejects(resolver.resolve(["Nexus"]), /descendant/);
   await assert.rejects(resolver.resolve(["Other", "A"]), /descendant/);
+});
+
+test("requests refuse redirects so a declared host cannot steer them elsewhere", async () => {
+  const modes: (RequestRedirect | undefined)[] = [];
+  const inner = network(liveRoutes);
+  const fetch = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+    modes.push(init?.redirect);
+    return inner(input, init);
+  };
+  const resolver = new EndpointResolver(new NodeClient(READ, ["Nexus"], { fetch }), { fetch });
+  assert.equal((await resolver.resolve(["Nexus", "testnet"])).length, 1);
+  assert.deepEqual(modes, ["error", "error"]);
+});
+
+test("with a lookup, a declared name resolving to a private address is never dialed", async () => {
+  const dialed: string[] = [];
+  const fetch = network(liveRoutes, dialed);
+  const looked: string[] = [];
+  const resolver = new EndpointResolver(new NodeClient(READ, ["Nexus"], { fetch }), {
+    fetch,
+    lookup: async (host) => {
+      looked.push(host);
+      return ["66.241.124.1", "10.0.0.5"];
+    },
+  });
+  assert.deepEqual(await resolver.resolve(["Nexus", "testnet"]), []);
+  assert.deepEqual(looked, ["lattice-mainnet-testnet.fly.dev"]);
+  assert.equal(dialed.filter((key) => key.startsWith(FOLLOWER)).length, 0);
+
+  const publicOnly = new EndpointResolver(new NodeClient(READ, ["Nexus"], { fetch }), {
+    fetch,
+    lookup: async () => ["66.241.124.1", "2a09:8280:1::1"],
+  });
+  assert.equal((await publicOnly.resolve(["Nexus", "testnet"])).length, 1);
+});
+
+test("a source naming a wrong committed block cannot spoil another source's candidate", async () => {
+  const fetch = network({
+    [`${READ}/api/chain/endpoints?chainPath=Nexus%2FA`]: JSON.stringify({
+      chainPath: ["Nexus", "A"],
+      committedBlock: "bafyA",
+      endpoints: ["https://a.example.org", "https://b.example.org"],
+      submitEndpoints: [],
+    }),
+    [`https://a.example.org/api/block/bafyA?chainPath=Nexus%2FA`]: JSON.stringify({
+      ...JSON.parse(fixture("testnet-child-block.json")),
+      hash: "bafyA",
+      chain: ["Nexus", "A"],
+    }),
+    [`https://b.example.org/api/block/bafyA?chainPath=Nexus%2FA`]: JSON.stringify({
+      ...JSON.parse(fixture("testnet-child-block.json")),
+      hash: "bafyA",
+      chain: ["Nexus", "A"],
+    }),
+    [`https://a.example.org/api/chain/endpoints?chainPath=Nexus%2FA%2FB`]: JSON.stringify({
+      chainPath: ["Nexus", "A", "B"],
+      committedBlock: "bafyWrong",
+      endpoints: ["https://c.example.org"],
+      submitEndpoints: [],
+    }),
+    [`https://b.example.org/api/chain/endpoints?chainPath=Nexus%2FA%2FB`]: JSON.stringify({
+      chainPath: ["Nexus", "A", "B"],
+      committedBlock: "bafyB",
+      endpoints: ["https://c.example.org"],
+      submitEndpoints: [],
+    }),
+    [`https://c.example.org/api/block/bafyB?chainPath=Nexus%2FA%2FB`]: JSON.stringify({
+      ...JSON.parse(fixture("testnet-child-block.json")),
+      hash: "bafyB",
+      chain: ["Nexus", "A", "B"],
+    }),
+  });
+  const resolver = new EndpointResolver(new NodeClient(READ, ["Nexus"], { fetch }), { fetch });
+  assert.deepEqual(
+    (await resolver.resolve(["Nexus", "A", "B"])).map((entry) => [entry.url, entry.committedBlock]),
+    [["https://c.example.org", "bafyB"]],
+  );
+});
+
+test("a walk stops at its request budget however wide the declared tree is", async () => {
+  let requests = 0;
+  const fetch = async (input: string | URL): Promise<Response> => {
+    requests += 1;
+    const url = new URL(input);
+    const path = (url.searchParams.get("chainPath") ?? "").split("/");
+    if (url.pathname === "/api/block/latest") {
+      return new Response(
+        JSON.stringify({ height: "1", hash: "bafytip", transactionCount: 0, timestamp: "1" }),
+      );
+    }
+    if (url.pathname.endsWith("/children")) {
+      return new Response(
+        JSON.stringify({
+          children: Array.from({ length: 50 }, (_, index) => ({
+            directory: `c${index}`,
+            blockHash: "bafychild",
+          })),
+        }),
+      );
+    }
+    if (url.pathname === "/api/chain/endpoints") {
+      return new Response(
+        JSON.stringify({
+          chainPath: path,
+          committedBlock: "bafychild",
+          endpoints: Array.from({ length: 20 }, (_, index) => `https://h${index}.example.org`),
+          submitEndpoints: [],
+        }),
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        ...JSON.parse(fixture("testnet-child-block.json")),
+        hash: "bafychild",
+        chain: path,
+      }),
+    );
+  };
+  const resolver = new EndpointResolver(new NodeClient(READ, ["Nexus"], { fetch }), {
+    fetch,
+    maximumRequests: 30,
+  });
+  const found = await resolver.tree();
+  assert.ok(requests <= 30, `made ${requests} requests`);
+  assert.ok(found.length > 0);
 });
