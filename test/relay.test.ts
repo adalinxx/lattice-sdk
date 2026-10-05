@@ -154,3 +154,28 @@ test("the default fetch is called with a valid receiver (browser Illegal invocat
     globalThis.fetch = original;
   }
 });
+
+test("an operator-port submitter sends the node cookie", async () => {
+  let seen: string | null = null;
+  let redirect: RequestRedirect | undefined;
+  const fetch = async (_input: string | URL, init?: RequestInit): Promise<Response> => {
+    seen = new Headers(init?.headers).get("Authorization");
+    redirect = init?.redirect;
+    return new Response(JSON.stringify({ transactionCID: "bafytransaction" }), { status: 200 });
+  };
+  const body = buildTransfer({
+    from: "alice",
+    to: "bob",
+    amount: 1n,
+    fee: 1n,
+    nonce: 0n,
+    chainPath: ["Nexus"],
+  });
+  const submitter = new HTTPTransactionSubmitter("http://127.0.0.1:8080/transactions", {
+    fetch,
+    authorization: "Bearer abc123",
+  });
+  await submitter.submit(transactionPayload({ ed01: "signature" }, body));
+  assert.equal(seen, "Bearer abc123");
+  assert.equal(redirect, "error", "the cookie never follows a redirect");
+});

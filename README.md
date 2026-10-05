@@ -93,6 +93,19 @@ if (result.transactionCID !== signedTransactionCID(payload.transaction.signature
 }
 ```
 
+A node's own loopback operator port requires the cookie the node writes at
+every start (`<data-directory>/.cookie`, bitcoind-style). Pass its content to
+both the read client and the submitter; public read endpoints need none:
+
+```ts
+const authorization = nodeCookieAuthorization(cookieFileContent);
+const reads = new NodeClient("http://127.0.0.1:8080", ["Nexus"], { authorization });
+const own = new HTTPTransactionSubmitter("http://127.0.0.1:8080/transactions", { authorization });
+```
+
+`NodeClient.health()` reports `height` (executed) and `bestHeaderHeight` (best
+known header chain) for sync progress.
+
 ## Conformance
 
 `vectors.lock.json` pins the authoritative vectors from

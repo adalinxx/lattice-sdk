@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { NodeClient } from "@adalinxx/lattice-client";
+import { nodeCookieAuthorization } from "@adalinxx/lattice-core";
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -65,4 +66,31 @@ test("the default fetch is called with a valid receiver (browser Illegal invocat
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("an operator-port client sends the node cookie; health parses bestHeaderHeight", async () => {
+  const seen: (string | null)[] = [];
+  const fetch = async (_input: string | URL, init?: RequestInit): Promise<Response> => {
+    seen.push(new Headers(init?.headers).get("Authorization"));
+    return response({
+      phase: "active",
+      chainPath: ["Nexus"],
+      nexusGenesisCID: "bafygenesis",
+      tipCID: "bafytip",
+      height: "40",
+      mempoolCount: 0,
+      mempoolBytes: 0,
+      bestHeaderHeight: "57",
+    });
+  };
+  const authorization = nodeCookieAuthorization("__cookie__:abc123\n");
+  assert.equal(authorization, `Basic ${btoa("__cookie__:abc123")}`);
+  assert.equal(nodeCookieAuthorization("abc123"), "Bearer abc123");
+  assert.throws(() => nodeCookieAuthorization("  "), /non-empty/);
+  const operator = new NodeClient("http://127.0.0.1:8080", ["Nexus"], { fetch, authorization });
+  const status = await operator.health();
+  assert.equal(status.height, 40n);
+  assert.equal(status.bestHeaderHeight, 57n);
+  await new NodeClient("https://reads.example.org", ["Nexus"], { fetch }).health();
+  assert.deepEqual(seen, [authorization, null]);
 });

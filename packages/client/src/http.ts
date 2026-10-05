@@ -64,11 +64,15 @@ export async function getJSON(
   timeoutMilliseconds: number,
   maximumResponseBytes: number,
   signal?: AbortSignal,
+  authorization?: string,
 ): Promise<unknown> {
   const timeout = AbortSignal.timeout(timeoutMilliseconds);
   const combined = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
   const response = await fetch(url, {
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      ...(authorization === undefined ? {} : { Authorization: authorization }),
+    },
     // A redirect would let any answering host steer the request to another
     // host or scheme; node routes never redirect.
     redirect: "error",

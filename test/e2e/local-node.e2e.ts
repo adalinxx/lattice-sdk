@@ -5,7 +5,7 @@
 // ever submitted to a live chain.
 import assert from "node:assert/strict";
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { mkdtempSync, openSync, rmSync } from "node:fs";
+import { mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +17,7 @@ import {
   accountFromPrivateKey,
   buildTransfer,
   hexToBytes,
+  nodeCookieAuthorization,
   signedTransactionCID,
   signTransactionBody,
   transactionPayload,
@@ -37,6 +38,8 @@ let node: ChildProcess;
 let directory: string;
 let operator: string;
 let publicListener: string;
+/** The operator port's cookie header (the node writes it at start). */
+let authorization: string;
 
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -65,11 +68,12 @@ async function until<T>(probe: () => Promise<T | undefined>, what: string): Prom
 
 /** Mines until the tip is `blocks` higher; one coordinator round may find nothing. */
 async function mine(blocks: number): Promise<void> {
-  const reads = new NodeClient(operator, ["Nexus"]);
+  const reads = new NodeClient(operator, ["Nexus"], { authorization });
   const target = ((await reads.chainInfo()).height ?? 0n) + BigInt(blocks);
   await until(async () => {
     await run(join(bin!, "lattice-mining-coordinator"), [
       ...["--node", operator, "--workers", "2"],
+      ...["--rpc-cookie-file", join(directory, "data", ".cookie")],
       ...["--recipient", `Nexus=${sender.address}`, "--once", "--no-stale-probe"],
     ]);
     return ((await reads.chainInfo()).height ?? 0n) >= target || undefined;
@@ -113,6 +117,7 @@ before(async () => {
     async () => (await fetch(`${publicListener}/health`)).ok || undefined,
     "public listener",
   );
+  authorization = nodeCookieAuthorization(readFileSync(join(directory, "data", ".cookie"), "utf8"));
 });
 
 after(async () => {
@@ -125,7 +130,9 @@ after(async () => {
 });
 
 test("local node: fund, submit via the operator and public relays, observe inclusion", async () => {
-  const reads = new NodeClient(operator, ["Nexus"]);
+  // The operator port refuses reads without the node's cookie.
+  await assert.rejects(new NodeClient(operator, ["Nexus"]).chainInfo(), { status: 401 });
+  const reads = new NodeClient(operator, ["Nexus"], { authorization });
   const publicReads = new NodeClient(publicListener, ["Nexus"]);
 
   const info = await reads.chainInfo();
@@ -141,7 +148,9 @@ test("local node: fund, submit via the operator and public relays, observe inclu
   assert.equal(page.blocks[0]?.rewardRecipient, sender.address);
   assert.equal((await reads.block(3n)).rewardCredited, funded.balance / 3n);
 
-  const operatorRelay = new HTTPTransactionSubmitter(`${operator}/transactions`);
+  const operatorRelay = new HTTPTransactionSubmitter(`${operator}/transactions`, {
+    authorization,
+  });
   const publicRelay = new HTTPTransactionSubmitter(`${publicListener}/transactions`);
   const transfer = (amount: bigint, fee: bigint, nonce: bigint, chainPath = ["Nexus"]) =>
     buildTransfer({ from: sender.address, to: recipient.address, amount, fee, nonce, chainPath });

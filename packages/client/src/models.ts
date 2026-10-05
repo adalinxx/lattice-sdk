@@ -21,6 +21,12 @@ export interface NodeStatus {
   readonly mempoolCount: number;
   readonly mempoolBytes: number;
   readonly templateDigest?: string;
+  /**
+   * Height of the best header chain the node knows; `height` (the deepest
+   * executed block on it) trails it while syncing. Absent before any header
+   * and from nodes predating it.
+   */
+  readonly bestHeaderHeight?: bigint;
 }
 
 export function parseNodeStatus(value: unknown): NodeStatus {
@@ -37,6 +43,9 @@ export function parseNodeStatus(value: unknown): NodeStatus {
     ...(body.templateDigest === undefined
       ? {}
       : { templateDigest: string(body.templateDigest, "status.templateDigest") }),
+    ...(body.bestHeaderHeight === undefined
+      ? {}
+      : { bestHeaderHeight: decimal(body.bestHeaderHeight, "status.bestHeaderHeight") }),
   };
 }
 
