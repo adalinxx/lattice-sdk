@@ -1,0 +1,47 @@
+name: Node integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: adalinxx/lattice-node
+          path: .integration/lattice-node
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the real node and mining coordinator
+        run: swift build --package-path .integration/lattice-node -c debug
+      - name: Exercise reads, private/public relay policy, mining, and inclusion
+        env:
+          LATTICE_NODE_BIN: ${{ github.workspace }}/.integration/lattice-node/.build/debug
+        run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: local-node-e2e-logs
+          path: /tmp/lattice-sdk-e2e-*/node.log
+          if-no-files-found: ignore

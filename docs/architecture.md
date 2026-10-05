@@ -34,6 +34,8 @@ spelling; there is one wire contract and no migration branch.
 
 `VolumeTransport` is the adapter boundary for the existing content service or
 DHT. The transport must return the complete Volume named by the requested root.
+`HTTPVolumeTransport` implements the web-client bridge using Ivy's canonical
+binary `VolumeArchive`; it does not translate content into JSON.
 Before the SDK exposes it:
 
 - the returned root must equal the requested root;
@@ -46,9 +48,12 @@ Volume members may use different codecs. CID verification is generic; typed
 DAG-CBOR decoding is applied only when the referenced Lattice structure calls
 for it. Unsupported multihash algorithms fail closed.
 
-Typed traversal must additionally validate the expected Lattice structure and
-authenticated references. Generic CID verification alone does not establish
-that a block is canonical; header-chain verification remains required.
+Typed traversal additionally validates Block and LatticeState structure and
+authenticated references. The client cross-checks node block projections with
+the canonical Block, verifies each non-genesis Nexus block's own proof of work,
+and exposes explicit parent/state continuity verification.
+Generic CID verification alone does not establish that a block won fork
+choice; checkpoint and proof-of-work header-chain verification remain required.
 
 ### Submission
 
