@@ -44,3 +44,9 @@ export function array<T>(
 export function stringArray(value: unknown, name: string): string[] {
   return array(value, name, string);
 }
+
+export function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new TypeError(`${name} must be a boolean`);
+  return value;
+}
