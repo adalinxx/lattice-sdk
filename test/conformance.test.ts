@@ -11,6 +11,7 @@ import {
   decodeEd25519Multikey,
   encodeDagCbor,
   encodeEd25519Multikey,
+  encodeSignedTransaction,
   encodeTransactionBody,
   hexToBytes,
   publicKeyFromPrivate,
@@ -76,6 +77,26 @@ for (const vector of encoding.vectors) {
     const bytes = encodeDagCbor(asDagCbor(vector.value));
     assert.equal(bytesToHex(bytes), vector.dagCborHex);
     assert.equal(cidV1DagCbor(bytes), vector.cid);
+  });
+}
+
+for (const vector of encoding.vectors.filter(
+  (candidate: { type: string }) => candidate.type === "Transaction",
+)) {
+  test(`signed transaction CID: ${vector.name}`, () => {
+    // Feed the signatures in reverse with upper-case hex: the encoder must
+    // normalize and sort them exactly as the node does.
+    const signatures = Object.fromEntries(
+      [...vector.value.signatures]
+        .reverse()
+        .map((entry: { key: string; value: string }) => [
+          entry.key.toUpperCase(),
+          entry.value.toUpperCase(),
+        ]),
+    );
+    const encoded = encodeSignedTransaction(signatures, vector.value.body.rawCID);
+    assert.equal(bytesToHex(encoded.bytes), vector.dagCborHex);
+    assert.equal(encoded.cid, vector.cid);
   });
 }
 

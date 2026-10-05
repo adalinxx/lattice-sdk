@@ -130,3 +130,27 @@ test("named node refusals surface as typed submission errors", async () => {
   assert.equal(off.status, 404);
   assert.equal(off.refusal, undefined);
 });
+
+test("the default fetch is called with a valid receiver (browser Illegal invocation)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = function (this: unknown) {
+    // Browsers throw "Illegal invocation" when fetch's receiver is not the global.
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    return Promise.resolve(new Response(JSON.stringify({ transactionCID: "bafy" })));
+  } as typeof fetch;
+  try {
+    const body = buildTransfer({
+      from: "alice",
+      to: "bob",
+      amount: 1n,
+      fee: 1n,
+      nonce: 0n,
+      chainPath: ["Nexus"],
+    });
+    const submitter = new HTTPTransactionSubmitter("https://relay.example.org/transactions");
+    const result = await submitter.submit(transactionPayload({ ed01: "signature" }, body));
+    assert.equal(result.transactionCID, "bafy");
+  } finally {
+    globalThis.fetch = original;
+  }
+});

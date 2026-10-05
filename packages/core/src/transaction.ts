@@ -183,6 +183,38 @@ export function transactionSigningPreimage(
   return lines.join("\n");
 }
 
+/**
+ * Canonical DAG-CBOR of a signed transaction envelope, as the node stores it:
+ * `{ body: { rawCID }, signatures: [{ key, value }] }` with signature entries
+ * sorted by lowercase-hex public key. The returned CID is the
+ * `transactionCID` a node reports on submission, so a client can verify it.
+ */
+export function encodeSignedTransaction(
+  signatures: Readonly<Record<string, string>>,
+  bodyCID: string,
+): { readonly bytes: Uint8Array; readonly cid: string } {
+  const entries = new Map<string, string>();
+  for (const [key, value] of Object.entries(signatures)) {
+    const normalizedKey = key.toLowerCase();
+    if (entries.has(normalizedKey)) throw new Error("duplicate signature key");
+    entries.set(normalizedKey, value.toLowerCase());
+  }
+  const sorted = [...entries.keys()].sort();
+  const bytes = encodeDagCbor({
+    body: { rawCID: bodyCID },
+    signatures: sorted.map((key) => ({ key, value: entries.get(key)! })),
+  });
+  return { bytes, cid: cidV1DagCbor(bytes) };
+}
+
+/** The CID of a signed transaction (see `encodeSignedTransaction`). */
+export function signedTransactionCID(
+  signatures: Readonly<Record<string, string>>,
+  body: TransactionBody,
+): string {
+  return encodeSignedTransaction(signatures, encodeTransactionBody(body).cid).cid;
+}
+
 export function toWireTransactionBody(body: TransactionBody): WireTransactionBody {
   assertBody(body);
   return {
