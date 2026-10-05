@@ -40,7 +40,7 @@ jobs:
           LATTICE_NODE_BIN: ${{ github.workspace }}/.integration/lattice-node/.build/debug
         run: npm run test:e2e
       - if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: local-node-e2e-logs
           path: /tmp/lattice-sdk-e2e-*/node.log
