@@ -424,3 +424,19 @@ test("a lookup that never answers is timed like any request", async () => {
   });
   assert.deepEqual(await resolver.resolve(["Nexus", "testnet"]), []);
 });
+
+test("the resolver's default fetch is called with a valid receiver", async () => {
+  const original = globalThis.fetch;
+  const routed = network(liveRoutes);
+  globalThis.fetch = function (this: unknown, input: string | URL, init?: RequestInit) {
+    // Browsers throw "Illegal invocation" when fetch's receiver is not the global.
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    return routed(input, init);
+  } as typeof fetch;
+  try {
+    const resolver = new EndpointResolver(new NodeClient(READ, ["Nexus"]));
+    assert.equal((await resolver.resolve(["Nexus", "testnet"]))[0]?.url, FOLLOWER);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

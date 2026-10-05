@@ -97,8 +97,31 @@ for (const vector of encoding.vectors.filter(
     const encoded = encodeSignedTransaction(signatures, vector.value.body.rawCID);
     assert.equal(bytesToHex(encoded.bytes), vector.dagCborHex);
     assert.equal(encoded.cid, vector.cid);
+    const prefixed = Object.fromEntries(
+      vector.value.signatures.map((entry: { key: string; value: string }) => [
+        `0x${entry.key}`,
+        `0x${entry.value}`,
+      ]),
+    );
+    assert.equal(encodeSignedTransaction(prefixed, vector.value.body.rawCID).cid, vector.cid);
   });
 }
+
+test("signed transaction CID refuses forms the node would keep verbatim", () => {
+  const key = `ed01${"ab".repeat(32)}`;
+  const signature = "cd".repeat(64);
+  const body = "bafyreidog6lzal3gjfvbvmmdccp3ibyndsy3hcvb22fhvtmxivsrmodiyy";
+  for (const bad of [
+    { [key]: signature.slice(1) },
+    { [key]: `0X${signature}` },
+    { [key]: "zz".repeat(64) },
+    { [`0X${key}`]: signature },
+    { [`ec01${"ab".repeat(32)}`]: signature },
+    { [key]: signature, [key.toUpperCase()]: signature },
+  ]) {
+    assert.throws(() => encodeSignedTransaction(bad, body));
+  }
+});
 
 test("transfer builder reproduces the normative account-action vector", () => {
   const vector = encoding.vectors.find(

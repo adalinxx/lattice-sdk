@@ -186,18 +186,27 @@ export function transactionSigningPreimage(
 /**
  * Canonical DAG-CBOR of a signed transaction envelope, as the node stores it:
  * `{ body: { rawCID }, signatures: [{ key, value }] }` with signature entries
- * sorted by lowercase-hex public key. The returned CID is the
+ * sorted by lowercase-hex public key (ed25519 Multikey keys, 64-byte
+ * signatures; a `0x` prefix or upper-case hex is normalized as the node does). The returned CID is the
  * `transactionCID` a node reports on submission, so a client can verify it.
  */
 export function encodeSignedTransaction(
   signatures: Readonly<Record<string, string>>,
   bodyCID: string,
 ): { readonly bytes: Uint8Array; readonly cid: string } {
+  // The node rewrites a parseable key/signature to lowercase hex without a
+  // `0x` prefix and keeps anything else verbatim; only the parseable forms
+  // can be valid, so accept exactly those and refuse the rest.
+  const canonical = (value: string, pattern: RegExp, what: string): string => {
+    const hex = value.startsWith("0x") ? value.slice(2) : value;
+    if (!pattern.test(hex)) throw new Error(`${what} is not canonical hex`);
+    return hex.toLowerCase();
+  };
   const entries = new Map<string, string>();
   for (const [key, value] of Object.entries(signatures)) {
-    const normalizedKey = key.toLowerCase();
+    const normalizedKey = canonical(key, /^[eE][dD]01[0-9a-fA-F]{64}$/, "signature key");
     if (entries.has(normalizedKey)) throw new Error("duplicate signature key");
-    entries.set(normalizedKey, value.toLowerCase());
+    entries.set(normalizedKey, canonical(value, /^[0-9a-fA-F]{128}$/, "signature"));
   }
   const sorted = [...entries.keys()].sort();
   const bytes = encodeDagCbor({
