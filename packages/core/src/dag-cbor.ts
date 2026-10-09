@@ -149,7 +149,7 @@ class Decoder {
       this.#offset = end;
       if (major === 2) return bytes;
       try {
-        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
       } catch {
         throw new Error("invalid UTF-8 in DAG-CBOR string");
       }
@@ -160,7 +160,7 @@ class Decoder {
       return output;
     }
     if (major === 5) {
-      const output: Record<string, DagCborValue> = {};
+      const output: Record<string, DagCborValue> = Object.create(null);
       let previous: string | undefined;
       for (let index = 0; index < this.#length(argument); index += 1) {
         const key = this.decode();
@@ -168,7 +168,12 @@ class Decoder {
         if (previous !== undefined && compareMapKeys(previous, key) >= 0) {
           throw new Error("DAG-CBOR map keys are duplicated or out of canonical order");
         }
-        output[key] = this.decode();
+        Object.defineProperty(output, key, {
+          value: this.decode(),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
         previous = key;
       }
       return output;

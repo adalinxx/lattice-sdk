@@ -2,5 +2,11 @@
   "repository": "adalinxx/Lattice",
   "commit": "73f21673b56577ad30a29c39ed1573609ffc4f70",
   "version": 1,
-  "files": ["addresses.json", "encoding.json", "proofs.json", "signing.json"]
+  "files": ["addresses.json", "encoding.json", "proofs.json", "signing.json"],
+  "sha256": {
+    "addresses.json": "40a474bece39b328b9d3b52ad823b66ff633d878368d2f3a4dde3450f73ca312",
+    "encoding.json": "ea97d837a52897f750be2211646c3c2a17a6c557cc785e38768406929025c82a",
+    "proofs.json": "49335524a9c18f1a7d93e00efbf12741e05e6a82512adbd1bf54f453148d5e34",
+    "signing.json": "6161fdaf48a0da5c6c29e7b78ca0777f46d9d34730101ffe398ee81b9efa97fd"
+  }
 }

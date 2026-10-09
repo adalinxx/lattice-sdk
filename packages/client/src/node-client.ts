@@ -40,7 +40,7 @@ function isLoopback(hostname: string): boolean {
 
 export function normalizeNodeURL(input: string): string {
   const url = new URL(input);
-  if (url.username || url.password || url.search || url.hash) {
+  if (url.username || url.password || input.includes("?") || input.includes("#")) {
     throw new Error("node URL must not contain credentials, a query, or a fragment");
   }
   if (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback(url.hostname))) {
@@ -81,14 +81,13 @@ export class NodeClient {
     parameters: Readonly<Record<string, string>> = {},
   ): Promise<unknown> {
     return parser(
-      await getJSON(
-        this.#fetch,
-        this.#url(path, parameters),
-        this.#timeoutMilliseconds,
-        this.#maximumResponseBytes,
+      await getJSON(this.#url(path, parameters), {
+        fetch: this.#fetch,
+        timeoutMilliseconds: this.#timeoutMilliseconds,
+        maximumResponseBytes: this.#maximumResponseBytes,
         signal,
-        this.#authorization,
-      ),
+        authorization: this.#authorization,
+      }),
     );
   }
 

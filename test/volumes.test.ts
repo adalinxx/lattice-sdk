@@ -61,7 +61,12 @@ test("complete Volumes are CID-verified before use", async () => {
   const transport = new MemoryVolumeTransport([serialized]);
   const volume = await new VolumeClient(transport).get(rootCID);
   assert.equal(volume.size, 2);
-  assert.deepEqual(volume.decodeRoot(), { child: { rawCID: leafCID } });
+  assert.deepEqual(
+    volume.decodeRoot(),
+    Object.assign(Object.create(null), {
+      child: Object.assign(Object.create(null), { rawCID: leafCID }),
+    }),
+  );
 });
 
 test("a tampered member invalidates the whole Volume", () => {
@@ -172,7 +177,7 @@ test("HTTP Volume transport retrieves and verifies Ivy archives", async () => {
     },
   });
   const volume = await new VolumeClient(transport).get(rootCID);
-  assert.deepEqual(volume.decodeRoot(), { value: 9n });
+  assert.deepEqual(volume.decodeRoot(), Object.assign(Object.create(null), { value: 9n }));
   assert.equal(
     request?.url,
     `https://content.example.org/volumes/${rootCID}?chainPath=Nexus%2FAlpha`,

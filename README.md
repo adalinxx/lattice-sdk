@@ -1,5 +1,33 @@
 # Lattice SDK
 
+### Low-level JSON transport
+
+`getJSON(url, options)` accepts an options object with `fetch`, `signal`,
+`authorization`, `timeoutMilliseconds` (default 8000), and `maximumResponseBytes`
+(default 4 MiB). It forbids redirects and bounds both fetch and body reads,
+including injected transports that ignore cancellation. An uncooperative
+transport may continue running after rejection; cancellation is best-effort.
+Callers must validate the base URL with `normalizeNodeURL` before adding route
+paths/query parameters. This primitive does not apply endpoint URL policy.
+
+```ts
+const base = normalizeNodeURL("https://node.example/rpc");
+const result = await getJSON(new URL(`${base}/api/chain/info`), {
+  timeoutMilliseconds: 3000,
+  maximumResponseBytes: 1024 * 1024,
+});
+```
+
+DAG-CBOR maps decode to null-prototype objects: absent fields do not inherit
+`constructor` or other prototype members. Valid keys, including `__proto__`,
+are preserved. Do not copy untrusted maps using `Object.assign({}, decoded)`:
+the ordinary destination's legacy prototype setter is still hazardous. Use
+`{ ...decoded }` or `Object.assign(Object.create(null), decoded)` instead.
+
+Vector downloads must match each file's SHA-256 in `vectors.lock.json` before
+being cached. Updating the lock deliberately repins both revision and content;
+review both changes rather than accepting a regenerated lock automatically.
+
 TypeScript-first developer SDK for building applications on Lattice.
 
 This repository sits above the protocol and infrastructure repositories:
