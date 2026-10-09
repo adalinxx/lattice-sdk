@@ -160,7 +160,7 @@ class Decoder {
       return output;
     }
     if (major === 5) {
-      const output: Record<string, DagCborValue> = {};
+      const output: Record<string, DagCborValue> = Object.create(null);
       let previous: string | undefined;
       for (let index = 0; index < this.#length(argument); index += 1) {
         const key = this.decode();

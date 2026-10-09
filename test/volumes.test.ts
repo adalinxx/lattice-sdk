@@ -24,7 +24,12 @@ test("complete Volumes are CID-verified before use", async () => {
   const transport = new MemoryVolumeTransport([serialized]);
   const volume = await new VolumeClient(transport).get(rootCID);
   assert.equal(volume.size, 2);
-  assert.deepEqual(volume.decodeRoot(), { child: { rawCID: leafCID } });
+  assert.deepEqual(
+    volume.decodeRoot(),
+    Object.assign(Object.create(null), {
+      child: Object.assign(Object.create(null), { rawCID: leafCID }),
+    }),
+  );
 });
 
 test("a tampered member invalidates the whole Volume", () => {

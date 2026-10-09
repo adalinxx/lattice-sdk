@@ -276,13 +276,12 @@ export class EndpointResolver {
     url.searchParams.set("chainPath", chainPath.join("/"));
     budget.spend();
     const declared = parseDeclaredEndpoints(
-      await getJSON(
-        this.#fetch,
-        url,
-        this.#timeoutMilliseconds,
-        this.#maximumResponseBytes,
+      await getJSON(url, {
+        fetch: this.#fetch,
+        timeoutMilliseconds: this.#timeoutMilliseconds,
+        maximumResponseBytes: this.#maximumResponseBytes,
         signal,
-      ),
+      }),
     );
     if (!samePath(declared.chainPath, chainPath)) {
       throw new TypeError("endpoints answer names a different chainPath");

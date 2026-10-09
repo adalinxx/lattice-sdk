@@ -81,14 +81,13 @@ export class NodeClient {
     parameters: Readonly<Record<string, string>> = {},
   ): Promise<unknown> {
     return parser(
-      await getJSON(
-        this.#fetch,
-        this.#url(path, parameters),
-        this.#timeoutMilliseconds,
-        this.#maximumResponseBytes,
+      await getJSON(this.#url(path, parameters), {
+        fetch: this.#fetch,
+        timeoutMilliseconds: this.#timeoutMilliseconds,
+        maximumResponseBytes: this.#maximumResponseBytes,
         signal,
-        this.#authorization,
-      ),
+        authorization: this.#authorization,
+      }),
     );
   }
 
