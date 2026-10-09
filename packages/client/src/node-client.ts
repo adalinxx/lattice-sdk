@@ -40,7 +40,7 @@ function isLoopback(hostname: string): boolean {
 
 export function normalizeNodeURL(input: string): string {
   const url = new URL(input);
-  if (url.username || url.password || url.search || url.hash) {
+  if (url.username || url.password || input.includes("?") || input.includes("#")) {
     throw new Error("node URL must not contain credentials, a query, or a fragment");
   }
   if (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback(url.hostname))) {
