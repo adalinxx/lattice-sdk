@@ -66,29 +66,30 @@ references.
 | `@adalinxx/lattice-relay`   | Explicit relay or private-node submission                            |
 | `@adalinxx/lattice-sdk`     | Convenience re-export of the four packages                           |
 
-Package names are reserved in the workspace but are not published yet.
+Releases publish all five packages together with npm provenance. See
+[`docs/getting-started.md`](docs/getting-started.md) for the application setup
+and [`docs/content-gateway.md`](docs/content-gateway.md) for the Ivy-compatible
+content bridge contract.
 
 ## Example
 
 ```ts
 import {
+  HTTPVolumeTransport,
   LatticeClient,
   NodeClient,
   VolumeClient,
-  type VolumeTransport,
 } from "@adalinxx/lattice-sdk";
 
-// Implement this adapter with the application's existing content service or
-// DHT client. It must return one complete Volume boundary for the requested root.
-const content: VolumeTransport = myContentService;
+const content = new HTTPVolumeTransport("https://content.example.org/volumes");
 
 const client = new LatticeClient(
   new NodeClient("https://reads.example.org", ["Nexus"]),
   new VolumeClient(content),
 );
 
-const { view, volume } = await client.latestBlock();
-console.log(view.height, volume.decodeRoot());
+const { view, canonical } = await client.latestBlock();
+console.log(view.height, canonical.postStateCID);
 ```
 
 Transaction submission is a separate, explicit capability:
@@ -158,12 +159,12 @@ The lock-file change and any conformance change must be reviewed together.
 
 ## Status
 
-This initial foundation implements canonical primitives, exact wire integers,
-verified Volume boundaries, UInt64 sparse-proof verification, the read-only
-node client, and explicit submission transports. Typed decoding and traversal
-for every Lattice block and state wrapper are the next protocol-facing
-additions; applications must not treat an unimplemented typed traversal as
-verified state.
+The SDK implements canonical primitives, exact wire integers, Ivy-compatible
+complete-Volume archives, CID verification, typed Block and LatticeState roots,
+block/state continuity checks, UInt64 sparse-proof verification, the read-only
+node client, and explicit submission transports. Full fork-choice validation
+remains an application/light-client responsibility and is never implied by a
+successful node read.
 
 ## License
 

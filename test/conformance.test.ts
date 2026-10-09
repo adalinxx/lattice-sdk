@@ -8,7 +8,10 @@ import {
   buildTransfer,
   bytesToHex,
   cidV1DagCbor,
+  canonicalBlockProofOfWorkHash,
+  canonicalBlockProofOfWorkPreimage,
   decodeEd25519Multikey,
+  decodeCanonicalBlock,
   encodeDagCbor,
   encodeEd25519Multikey,
   encodeSignedTransaction,
@@ -77,6 +80,39 @@ for (const vector of encoding.vectors) {
     const bytes = encodeDagCbor(asDagCbor(vector.value));
     assert.equal(bytesToHex(bytes), vector.dagCborHex);
     assert.equal(cidV1DagCbor(bytes), vector.cid);
+  });
+}
+
+for (const vector of encoding.vectors.filter(
+  (candidate: { type: string }) => candidate.type === "Block",
+)) {
+  test(`typed canonical block: ${vector.name}`, () => {
+    const block = decodeCanonicalBlock(hexToBytes(vector.dagCborHex));
+    assert.equal(block.version, vector.value.version);
+    assert.equal(block.height, BigInt(vector.value.height));
+    assert.equal(block.timestamp, BigInt(vector.value.timestamp));
+    assert.equal(block.nonce, BigInt(vector.value.nonce));
+    assert.equal(block.parentCID, vector.value.parent?.rawCID);
+    assert.equal(block.transactionsCID, vector.value.transactions.rawCID);
+    assert.equal(block.previousStateCID, vector.value.prevState.rawCID);
+    assert.equal(block.postStateCID, vector.value.postState.rawCID);
+    assert.equal(block.childrenCID, vector.value.children.rawCID);
+    assert.equal(block.rewardRecipient, vector.value.rewardRecipient);
+    if (vector.name === "block/genesis") {
+      assert.equal(
+        bytesToHex(canonicalBlockProofOfWorkHash(block)),
+        "ae6610161723772d77741acd0c8bfcc495c1980856ec234dc1a9bf972c10f69b",
+      );
+      const rewarded = { ...block, rewardRecipient: "recipient" };
+      assert.deepEqual(
+        canonicalBlockProofOfWorkPreimage(rewarded).slice(-19),
+        Uint8Array.from([1, ...utf8("recipient"), ...new Uint8Array(9)]),
+      );
+      assert.notDeepEqual(
+        canonicalBlockProofOfWorkHash(rewarded),
+        canonicalBlockProofOfWorkHash(block),
+      );
+    }
   });
 }
 

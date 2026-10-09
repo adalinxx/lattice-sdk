@@ -1,6 +1,7 @@
 export * from "./address.js";
 export * from "./bytes.js";
 export * from "./cid.js";
+export * from "./canonical-values.js";
 export * from "./dag-cbor.js";
 export * from "./multikey.js";
 export * from "./signing.js";

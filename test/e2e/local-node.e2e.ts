@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { promisify } from "node:util";
 
-import { NodeClient } from "@adalinxx/lattice-client";
+import { LatticeClient, NodeClient } from "@adalinxx/lattice-client";
 import {
   accountFromPrivateKey,
   buildTransfer,
@@ -24,6 +24,7 @@ import {
   type TransactionBody,
 } from "@adalinxx/lattice-core";
 import { HTTPTransactionSubmitter, SubmissionError } from "@adalinxx/lattice-relay";
+import { HTTPVolumeTransport, VolumeClient } from "@adalinxx/lattice-volumes";
 
 const bin = process.env.LATTICE_NODE_BIN;
 if (bin === undefined)
@@ -148,6 +149,19 @@ test("local node: fund, submit via the operator and public relays, observe inclu
   assert.equal(page.blocks[0]?.rewardRecipient, sender.address);
   assert.equal((await reads.block(3n)).rewardCredited, funded.balance / 3n);
 
+  // The web content bridge serves Ivy's complete binary Volume. The SDK
+  // verifies every member CID, decodes the canonical Block, and cross-checks
+  // the node's JSON projection. Public reads need no content-specific format.
+  const verified = new LatticeClient(
+    publicReads,
+    new VolumeClient(new HTTPVolumeTransport(`${publicListener}/volumes`)),
+  );
+  const latest = await verified.latestBlock();
+  assert.equal(latest.canonical.height, 3n);
+  assert.equal(latest.canonical.postStateCID, latest.view.postStateCID);
+  const postState = await verified.postState(latest.view.hash);
+  assert.ok(postState.canonical.accountStateCID.startsWith("bafy"));
+
   const operatorRelay = new HTTPTransactionSubmitter(`${operator}/transactions`, {
     authorization,
   });
@@ -174,10 +188,11 @@ test("local node: fund, submit via the operator and public relays, observe inclu
   assert.equal(unknown.status, 404);
 
   // Operator (loopback) route. The CID the node reports is recomputable locally.
-  const firstPayload = signed(transfer(1_000n, 5n, 0n));
+  const firstBody = transfer(1_000n, 5n, 0n);
+  const firstPayload = signed(firstBody);
   const first = await operatorRelay.submit(firstPayload);
   assert.equal(
-    signedTransactionCID(firstPayload.transaction.signatures, transfer(1_000n, 5n, 0n)),
+    signedTransactionCID(firstPayload.transaction.signatures, firstBody),
     first.transactionCID,
   );
   const cheaper = await refusal(operatorRelay.submit(signed(transfer(999n, 2n, 0n))));
@@ -192,6 +207,10 @@ test("local node: fund, submit via the operator and public relays, observe inclu
   assert.equal(block.hash, included.blockHash);
   assert.equal(block.transactionCount, 1);
   assert.equal(block.rewardCredited, (await reads.block(1n)).rewardCredited! + 5n);
+  const verifiedTransaction = await verified.transaction(first.transactionCID);
+  const expectedBodyCID = signTransactionBody(firstBody, sender.privateKey).bodyCID;
+  assert.equal(verifiedTransaction.canonical.bodyCID, expectedBodyCID);
+  assert.equal(verifiedTransaction.transaction.has(expectedBodyCID), true);
 
   // Public listener with --public-submit.
   const secondPayload = signed(transfer(2_000n, 3n, 1n));

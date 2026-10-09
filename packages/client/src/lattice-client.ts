@@ -1,3 +1,12 @@
+import {
+  decodeCanonicalBlock,
+  decodeCanonicalLatticeState,
+  decodeCanonicalSignedTransaction,
+  verifyNexusBlockProofOfWork,
+  type CanonicalBlock,
+  type CanonicalLatticeState,
+  type CanonicalSignedTransaction,
+} from "@adalinxx/lattice-core";
 import { type VerifiedVolume, VolumeClient } from "@adalinxx/lattice-volumes";
 import { type BlockView, type TransactionProjection } from "./models.js";
 import { NodeClient } from "./node-client.js";
@@ -15,6 +24,7 @@ export class LatticeClient {
   async latestBlock(signal?: AbortSignal): Promise<{
     readonly view: BlockView;
     readonly volume: VerifiedVolume;
+    readonly canonical: CanonicalBlock;
   }> {
     const latest = await this.node.latestBlock(signal);
     return this.block(latest.hash, signal);
@@ -23,19 +33,55 @@ export class LatticeClient {
   async block(
     id: string | bigint,
     signal?: AbortSignal,
-  ): Promise<{ readonly view: BlockView; readonly volume: VerifiedVolume }> {
+  ): Promise<{
+    readonly view: BlockView;
+    readonly volume: VerifiedVolume;
+    readonly canonical: CanonicalBlock;
+  }> {
     const view = await this.node.block(id, signal);
-    return { view, volume: await this.volumes.get(view.hash, signal) };
+    const volume = await this.volumes.get(view.hash, signal);
+    const canonical = decodeCanonicalBlock(volume.rootBytes());
+    const expected = [
+      ["height", canonical.height, view.height],
+      ["timestamp", canonical.timestamp, view.timestamp],
+      ["nonce", canonical.nonce, view.nonce],
+      ["version", canonical.version, view.version],
+      ["parent", canonical.parentCID, view.previousBlock],
+      ["target", canonical.target, view.target],
+      ["next target", canonical.nextTarget, view.nextTarget],
+      ["transactions", canonical.transactionsCID, view.transactionsCID],
+      ["post-state", canonical.postStateCID, view.postStateCID],
+      ["reward recipient", canonical.rewardRecipient, view.rewardRecipient],
+    ] as const;
+    for (const [name, content, projection] of expected) {
+      if (content !== projection)
+        throw new Error(`node ${name} does not match canonical Block content`);
+    }
+    if (
+      this.node.chainPath.length === 1 &&
+      canonical.height > 0n &&
+      !verifyNexusBlockProofOfWork(canonical)
+    ) {
+      throw new Error("canonical Nexus Block does not satisfy its proof-of-work target");
+    }
+    return { view, volume, canonical };
   }
 
-  async postState(id: string | bigint, signal?: AbortSignal): Promise<VerifiedVolume> {
-    const block = await this.node.block(id, signal);
-    return this.volumes.get(block.postStateCID, signal);
+  async postState(
+    id: string | bigint,
+    signal?: AbortSignal,
+  ): Promise<{
+    readonly volume: VerifiedVolume;
+    readonly canonical: CanonicalLatticeState;
+  }> {
+    const block = await this.block(id, signal);
+    const volume = await this.volumes.get(block.canonical.postStateCID, signal);
+    return { volume, canonical: decodeCanonicalLatticeState(volume.rootBytes()) };
   }
 
   async transactions(id: string | bigint, signal?: AbortSignal): Promise<VerifiedVolume> {
-    const block = await this.node.block(id, signal);
-    return this.volumes.get(block.transactionsCID, signal);
+    const block = await this.block(id, signal);
+    return this.volumes.get(block.canonical.transactionsCID, signal);
   }
 
   async transaction(
@@ -44,19 +90,23 @@ export class LatticeClient {
   ): Promise<{
     readonly projection: TransactionProjection;
     readonly transaction: VerifiedVolume;
-    readonly body: VerifiedVolume;
+    readonly canonical: CanonicalSignedTransaction;
+    readonly body: Uint8Array;
   }> {
-    const [projection, reference, transaction] = await Promise.all([
+    const [projection, transaction] = await Promise.all([
       this.node.transaction(cid, signal),
-      this.node.transactionContent(cid, signal),
       this.volumes.get(cid, signal),
     ]);
-    if (reference.cid !== cid)
-      throw new Error(`node returned transaction ${reference.cid} for ${cid}`);
+    if (projection.txCID !== cid)
+      throw new Error(`node returned transaction projection ${projection.txCID} for ${cid}`);
+    const canonical = decodeCanonicalSignedTransaction(transaction.rootBytes());
+    const body = transaction.bytes(canonical.bodyCID);
+    if (body === undefined) throw new Error("transaction Volume does not contain its body");
     return {
       projection,
       transaction,
-      body: await this.volumes.get(reference.bodyCID, signal),
+      canonical,
+      body,
     };
   }
 }
