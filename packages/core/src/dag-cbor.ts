@@ -168,7 +168,12 @@ class Decoder {
         if (previous !== undefined && compareMapKeys(previous, key) >= 0) {
           throw new Error("DAG-CBOR map keys are duplicated or out of canonical order");
         }
-        Object.defineProperty(output, key, { value: this.decode(), enumerable: true, writable: true, configurable: true });
+        Object.defineProperty(output, key, {
+          value: this.decode(),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
         previous = key;
       }
       return output;
